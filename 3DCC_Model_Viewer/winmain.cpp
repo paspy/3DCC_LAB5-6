@@ -29,6 +29,7 @@ float proj = 70.0f;
 float g_cameraHeight = 30.0f;
 float g_cameraZ = 15.0f;
 enum File_Extension { FILE_EXT_MESH, FILE_EXT_SCN };
+
 struct Mesh {
 	string m_meshName;
 	vector<VertexPositionNormalTexture> m_vertex;
@@ -44,12 +45,31 @@ struct Mesh {
 		return *this;
 	}
 };
+
 struct Scene {
-	unsigned int m_meshNum = 0;
+	vector<string> m_meshNames;
 	map<string, Mesh> m_meshes;
+	vector<XMMATRIX> m_worldMatrix;
+	vector<BufferInfo> m_buffInfos;
 	void clear() {
-		m_meshNum = 0;
+		m_meshNames.clear();
 		m_meshes.clear();
+		m_worldMatrix.clear();
+		m_buffInfos.clear();
+	}
+	void FillInTheBuffer() {
+		if (m_meshes.empty()) return;
+
+		m_buffInfos.resize(m_meshNames.size());
+		for (unsigned int i = 0; i < m_meshNames.size(); i++) {
+			DXLayer.LoadVertexAndIndexData_PosNormalTexture(
+				&m_meshes[m_meshNames[i]].m_vertex[0],
+				m_meshes[m_meshNames[i]].m_vertex.size(),
+				&m_meshes[m_meshNames[i]].m_index[0],
+				m_meshes[m_meshNames[i]].m_index.size(),
+				&m_buffInfos[i]
+			);
+		}
 	}
 };
 
@@ -144,22 +164,37 @@ void LoadSceneFromFile(const char *path) {
 		file_size = fin.tellg();
 		unsigned int numberOfObjects;
 		fin.read((char*)&numberOfObjects, sizeof(numberOfObjects));
-		aScene.m_meshNum = numberOfObjects;
+
+		//aScene.m_meshNum = numberOfObjects;
+		//aScene.m_meshNames.resize(numberOfObjects);
 
 		for (unsigned int i = 0; i < numberOfObjects; i++) {
 			unsigned int fileNameLength;
 			fin.read((char*)&fileNameLength, sizeof(fileNameLength));
 			char* fn = new char[fileNameLength];
 			fin.read(fn, fileNameLength*sizeof(char));
-			string fileName = fn;
+			string fileName = fn;	// fileName = meshName
 			delete[] fn;
 			XMFLOAT4X4 matrix4x4;
 			fin.read((char*)&matrix4x4, sizeof(matrix4x4));
-			XMMATRIX matrix;
-			matrix = XMLoadFloat4x4(&matrix4x4);
+			XMMATRIX worldMatrix;		
+			worldMatrix = XMLoadFloat4x4(&matrix4x4);	// mesh poistion
 
+			Mesh tmpMesh;
+			string meshDirectory = mainApplicationDirectory;
+			meshDirectory += "\\mesh";
+			SetCurrentDirectory(meshDirectory.c_str());
+			tmpMesh = LoadMeshFromFile(fileName.c_str());			// loading a mesh!!
+			//aScene.m_meshNames[i] = tmpMesh.m_meshName;
+			aScene.m_meshNames.push_back(tmpMesh.m_meshName);
+			map<string, Mesh>::iterator meshIt = aScene.m_meshes.find(tmpMesh.m_meshName);
+			if (meshIt == aScene.m_meshes.end()) {
+				aScene.m_meshes.insert(pair<string, Mesh>(tmpMesh.m_meshName, tmpMesh));
+			}
+			aScene.m_worldMatrix.push_back(worldMatrix);
 		}
-
+		aScene.FillInTheBuffer();
+		fin.close();
 	}
 }
 
