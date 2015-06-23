@@ -3,14 +3,7 @@
 #include "resource.h"
 #include "mmsystem.h"
 #pragma comment(lib, "WinMM.lib")
-#include <fstream>
-#include <vector>
-#include <map>
 #include <string>
-#include <sstream>
-#include <iostream>
-
-
 using namespace std;
 
 #pragma comment(lib, "lib/DirectXLayer_2013.lib")
@@ -32,24 +25,10 @@ int g_height = 720;
 float proj = 70.0f;
 float g_cameraHeight = 30.0f;
 float g_cameraZ = 15.0f;
+enum File_Extension { FILE_EXT_MESH, FILE_EXT_SCN };
 
 bool loaded = false;
 string mainApplicationDirectory;
-
-vector<VertexPositionNormalTexture> vertexData;
-vector<unsigned int> indexData;
-vector<string> textureData;
-vector<string> textureForOne;
-vector<string> textureForTwo;
-string meshNameData;
-BufferInfo bufferInfo[3];
-
-void clearEverthing() {
-	vertexData.clear();
-	indexData.clear();
-	textureData.clear();
-	meshNameData.clear();
-}
 
 
 INT_PTR CALLBACK DialogProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -59,7 +38,7 @@ void ResizeDevice(void);
 void Update(void);
 void Render(void);
 void LoadMeshFromFile(const char * path);
-string GetFilePath(void);
+string GetFilePath(File_Extension ext = FILE_EXT_MESH);
 
 //--------------------------------------------------------------------------------------
 // Entry point to the program. Initializes everything and goes into a message processing 
@@ -124,90 +103,18 @@ int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 void LoadMeshFromFile(const char *path)
 {
 	// TODO: Load mesh data and send it to the graphics card.
-	if (strlen(path) < 1) return;
-
-	ifstream fin;
-	streampos file_size;
-
-	fin.open(path, ios_base::binary | ios_base::in);
-
-	if (fin.is_open()) {
-		file_size = fin.tellg();
-
-		unsigned int meshNameLength;
-		fin.read((char*)&meshNameLength, sizeof(meshNameLength));
-		//fin.read(meshName, meshNameLength*sizeof(char));
-		char* meshName = new char[meshNameLength];
-		fin.read(meshName, meshNameLength*sizeof(char));
-		
-		meshNameData = meshName;
-		delete[] meshName;
-		unsigned int textureCounts;
-		fin.read((char*)&textureCounts, sizeof(textureCounts));
-
-		for (unsigned int i = 0; i < textureCounts; i++) {
-			unsigned int textureNameLength;
-			fin.read((char*)&textureNameLength, sizeof(textureNameLength));
-			char* texName = new char[textureNameLength];
-			fin.read(texName, textureNameLength*sizeof(char));
-			string pendingName = texName;
-			delete[] texName;
-			std::size_t found = pendingName.find_last_of("/\\");
-
-			textureData.push_back(pendingName.substr(found + 1));
-			DXLayer.LoadTexture(pendingName.substr(found + 1).c_str());
-		}
-
-		unsigned int uniqueVertCounts;
-		fin.read((char*)&uniqueVertCounts, sizeof(uniqueVertCounts));
-
-		for (unsigned int i = 0; i < uniqueVertCounts; i++) {
-			VertexPositionNormalTexture vpnt;
-			// position
-			fin.read((char*)&vpnt.position.x, sizeof(float));
-			fin.read((char*)&vpnt.position.y, sizeof(float));
-			fin.read((char*)&vpnt.position.z, sizeof(float));
-			// normals
-			fin.read((char*)&vpnt.normal.x, sizeof(float));
-			fin.read((char*)&vpnt.normal.y, sizeof(float));
-			fin.read((char*)&vpnt.normal.z, sizeof(float));
-			// uvs
-			fin.read((char*)&vpnt.textureCoordinate.x, sizeof(float));
-			fin.read((char*)&vpnt.textureCoordinate.y, sizeof(float));
-			vertexData.push_back(vpnt);
-		}
-		
-		unsigned int triangleCounts;
-		fin.read((char*)&triangleCounts, sizeof(triangleCounts));
-
-		for (unsigned int i = 0; i < triangleCounts; i++) {
-			//indices in a triangle
-			unsigned int a, b, c;
-			fin.read((char*)&a, sizeof(unsigned int));
-			fin.read((char*)&b, sizeof(unsigned int));
-			fin.read((char*)&c, sizeof(unsigned int));
-
-			indexData.push_back(a);
-			indexData.push_back(b);
-			indexData.push_back(c);
-		}
-
-		fin.close();
-	}
-
-
-	DXLayer.CreateCameraMatrix(XMVectorSet(5.0f, 0.0f, 0.0f, 0.0f), XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f));
 }
 
-
-
 // Open a file dialog box and return the selected path.
-string GetFilePath(void)
+string GetFilePath(File_Extension ext)
 {
 	string extension;
 	char buffer[256] = "\0";
 	OPENFILENAME opFile;
-	extension = "Mesh Files (*.mesh)#*.mesh#";
+	if (ext == FILE_EXT_MESH)
+		extension = "Mesh Files (*.mesh)#*.mesh#";
+	else if (ext == FILE_EXT_SCN)
+		extension = "Scene Files (*.scn)#*.scn#";
 	char szFilters[64];		// buffer of file filters
 	memset( szFilters, 0, sizeof( szFilters ) );
 	memcpy( szFilters, extension.c_str(), extension.length() );
@@ -259,32 +166,22 @@ INT_PTR CALLBACK DialogProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		{
 		case ID_ACCELERATOR_OPEN:
 		case ID_FILE_OPEN_MENU:
-			//MessageBox(NULL, "I'm a placeholder for now!", "Task!", MB_OK);
-			clearEverthing();
-			LoadMeshFromFile(GetFilePath().c_str());
+			// TODO: Open up a .scn file and load meshes from it.
+			MessageBox(NULL, "Load a Scene file and render everything!", "Task!", MB_OK);
 			break;
-
 		case ID_FILE_EXIT:
 			SendMessage(hDlg, WM_CLOSE, 0, 0);
 			return TRUE;
 		case IDC_BUTTON1:
 			{
-				//MessageBox(NULL, "Load the bench and draw it on the left", "Task!", MB_OK);
-				clearEverthing();
-				LoadMeshFromFile(GetFilePath().c_str());
-				textureForOne = textureData;
-
-				DXLayer.LoadVertexAndIndexData_PosNormalTexture(&vertexData[0], vertexData.size(), &indexData[0], indexData.size(), &bufferInfo[0]);
-
+				MessageBox(NULL, "Load the bench and draw it on the left", "Task!", MB_OK);
+				
 				break;
 			}
 		case IDC_BUTTON2:
 			{
-				//MessageBox(NULL, "Load Major N and draw him in the middle", "Task!", MB_OK);
-				clearEverthing();
-				LoadMeshFromFile(GetFilePath().c_str());
-				textureForTwo = textureData;
-				DXLayer.LoadVertexAndIndexData_PosNormalTexture(&vertexData[0], vertexData.size(), &indexData[0], indexData.size(), &bufferInfo[1]);
+				MessageBox(NULL, "Load Major N and draw him in the middle", "Task!", MB_OK);
+				
 				break;
 			}
 		case IDC_BUTTON3:
@@ -373,28 +270,7 @@ void Update(void)
 	DXLayer.CreateCameraMatrix(XMVectorSet(0.0f, g_cameraHeight, g_cameraZ, 0.0f), XMVectorSet(0.0f, 5.0f, 0.0f, 0.0f));
 }
 
-void Render() {
+void Render()
+{
 	// TODO: Draw stuff here.
-	const float clearColor[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
-	DXLayer.Clear(clearColor);
-	XMMATRIX worldMat = XMMatrixIdentity();
-
-	worldMat = XMMatrixTranslation(-5.0f, 0.0f, 0.0f);
-
-
-	DXLayer.SetWorldMatrix(&worldMat);
-	for (size_t i = 0; i < textureForOne.size(); i++) {
-		DXLayer.SetTexture(textureForOne[i].c_str());
-	}
-	DXLayer.DrawMesh(&bufferInfo[0]);
-
-	worldMat = XMMatrixTranslation(5.0f, 0.0f, 0.0f);
-
-	DXLayer.SetWorldMatrix(&worldMat);
-	for (size_t i = 0; i < textureForTwo.size(); i++) {
-		DXLayer.SetTexture(textureForTwo[i].c_str());
-	}
-	DXLayer.DrawMesh(&bufferInfo[1]);
-
-	DXLayer.Present();
 }
