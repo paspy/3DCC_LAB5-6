@@ -449,4 +449,18 @@ void Update(void)
 void Render()
 {
 	// TODO: Draw stuff here.
+	const float clearColor[4] = { 1.0f, 1.0f, 0.0f, 1.0f };
+	DXLayer.Clear(clearColor);
+
+	for (size_t totalMeshes = 0; totalMeshes < aScene.m_meshNames.size(); totalMeshes++) {
+		DXLayer.SetWorldMatrix(&aScene.m_worldMatrix[totalMeshes]);
+		for (size_t totalTextures = 0; totalTextures < aScene.m_meshes[aScene.m_meshNames[totalMeshes]].m_texture.size(); totalTextures++) {
+			string texture = aScene.m_meshes[aScene.m_meshNames[totalMeshes]].m_texture[totalTextures];
+			DXLayer.SetTexture(texture.c_str());
+		}
+		DXLayer.DrawMesh(&aScene.m_buffInfos[totalMeshes]);
+	}
+
+	DXLayer.Present();
+
 }
