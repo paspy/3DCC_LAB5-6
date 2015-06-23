@@ -4,6 +4,9 @@
 #include "mmsystem.h"
 #pragma comment(lib, "WinMM.lib")
 #include <string>
+
+#include <fstream>
+#include <map>
 using namespace std;
 
 #pragma comment(lib, "lib/DirectXLayer_2013.lib")
@@ -26,6 +29,31 @@ float proj = 70.0f;
 float g_cameraHeight = 30.0f;
 float g_cameraZ = 15.0f;
 enum File_Extension { FILE_EXT_MESH, FILE_EXT_SCN };
+struct Mesh {
+	string m_meshName;
+	vector<VertexPositionNormalTexture> m_vertex;
+	vector<unsigned int> m_index;
+	vector<string> m_texture;
+	Mesh& operator= (const Mesh& other) {
+		if (this != &other) {
+			m_meshName = other.m_meshName;
+			m_vertex = other.m_vertex;
+			m_index = other.m_index;
+			m_texture = other.m_texture;
+		}
+		return *this;
+	}
+};
+struct Scene {
+	unsigned int m_meshNum = 0;
+	map<string, Mesh> m_meshes;
+	void clear() {
+		m_meshNum = 0;
+		m_meshes.clear();
+	}
+};
+
+Scene aScene;
 
 bool loaded = false;
 string mainApplicationDirectory;
@@ -37,8 +65,16 @@ void ResizeDisplayPanel(void);
 void ResizeDevice(void);
 void Update(void);
 void Render(void);
-void LoadMeshFromFile(const char * path);
+Mesh LoadMeshFromFile(const char * path);
+void LoadSceneFromFile(const char *path);
+
 string GetFilePath(File_Extension ext = FILE_EXT_MESH);
+
+
+
+
+
+
 
 //--------------------------------------------------------------------------------------
 // Entry point to the program. Initializes everything and goes into a message processing 
@@ -98,11 +134,114 @@ int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	return ( int )msg.wParam;
 }
 
+void LoadSceneFromFile(const char *path) {
+	if (strlen(path) < 1) return;
+	ifstream fin;
+	streampos file_size;
+
+	fin.open(path, ios_base::binary | ios_base::in);
+	if (fin.is_open()) {
+		file_size = fin.tellg();
+		unsigned int numberOfObjects;
+		fin.read((char*)&numberOfObjects, sizeof(numberOfObjects));
+		aScene.m_meshNum = numberOfObjects;
+
+		for (unsigned int i = 0; i < numberOfObjects; i++) {
+			unsigned int fileNameLength;
+			fin.read((char*)&fileNameLength, sizeof(fileNameLength));
+			char* fn = new char[fileNameLength];
+			fin.read(fn, fileNameLength*sizeof(char));
+			string fileName = fn;
+			delete[] fn;
+			XMFLOAT4X4 matrix4x4;
+			fin.read((char*)&matrix4x4, sizeof(matrix4x4));
+			XMMATRIX matrix;
+			matrix = XMLoadFloat4x4(&matrix4x4);
+
+		}
+
+	}
+}
 
 
-void LoadMeshFromFile(const char *path)
+Mesh LoadMeshFromFile(const char *path)
 {
+	Mesh aMesh;
 	// TODO: Load mesh data and send it to the graphics card.
+	if (strlen(path) < 1) return aMesh;
+
+
+	ifstream fin;
+	streampos file_size;
+
+	fin.open(path, ios_base::binary | ios_base::in);
+
+	if (fin.is_open()) {
+		file_size = fin.tellg();
+
+		unsigned int meshNameLength;
+		fin.read((char*)&meshNameLength, sizeof(meshNameLength));
+		//fin.read(meshName, meshNameLength*sizeof(char));
+		char* meshName = new char[meshNameLength];
+		fin.read(meshName, meshNameLength*sizeof(char));
+
+		aMesh.m_meshName = meshName;
+		delete[] meshName;
+		unsigned int textureCounts;
+		fin.read((char*)&textureCounts, sizeof(textureCounts));
+
+		for (unsigned int i = 0; i < textureCounts; i++) {
+			unsigned int textureNameLength;
+			fin.read((char*)&textureNameLength, sizeof(textureNameLength));
+			char* texName = new char[textureNameLength];
+			fin.read(texName, textureNameLength*sizeof(char));
+			string pendingName = texName;
+			delete[] texName;
+			std::size_t found = pendingName.find_last_of("/\\");
+
+			aMesh.m_texture.push_back(pendingName.substr(found + 1));
+			DXLayer.LoadTexture(pendingName.substr(found + 1).c_str());
+		}
+
+		unsigned int uniqueVertCounts;
+		fin.read((char*)&uniqueVertCounts, sizeof(uniqueVertCounts));
+
+		for (unsigned int i = 0; i < uniqueVertCounts; i++) {
+			VertexPositionNormalTexture vpnt;
+			// position
+			fin.read((char*)&vpnt.position.x, sizeof(float));
+			fin.read((char*)&vpnt.position.y, sizeof(float));
+			fin.read((char*)&vpnt.position.z, sizeof(float));
+			// normals
+			fin.read((char*)&vpnt.normal.x, sizeof(float));
+			fin.read((char*)&vpnt.normal.y, sizeof(float));
+			fin.read((char*)&vpnt.normal.z, sizeof(float));
+			// uvs
+			fin.read((char*)&vpnt.textureCoordinate.x, sizeof(float));
+			fin.read((char*)&vpnt.textureCoordinate.y, sizeof(float));
+			aMesh.m_vertex.push_back(vpnt);
+		}
+
+		unsigned int triangleCounts;
+		fin.read((char*)&triangleCounts, sizeof(triangleCounts));
+
+		for (unsigned int i = 0; i < triangleCounts; i++) {
+			//indices in a triangle
+			unsigned int a, b, c;
+			fin.read((char*)&a, sizeof(unsigned int));
+			fin.read((char*)&b, sizeof(unsigned int));
+			fin.read((char*)&c, sizeof(unsigned int));
+
+			aMesh.m_index.push_back(a);
+			aMesh.m_index.push_back(b);
+			aMesh.m_index.push_back(c);
+		}
+
+		fin.close();
+	}
+	return aMesh;
+
+	//DXLayer.CreateCameraMatrix(XMVectorSet(5.0f, 0.0f, 0.0f, 0.0f), XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f));
 }
 
 // Open a file dialog box and return the selected path.
@@ -167,7 +306,9 @@ INT_PTR CALLBACK DialogProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		case ID_ACCELERATOR_OPEN:
 		case ID_FILE_OPEN_MENU:
 			// TODO: Open up a .scn file and load meshes from it.
-			MessageBox(NULL, "Load a Scene file and render everything!", "Task!", MB_OK);
+			//MessageBox(NULL, "Load a Scene file and render everything!", "Task!", MB_OK);
+			aScene.clear();
+			LoadSceneFromFile(GetFilePath(FILE_EXT_SCN).c_str());
 			break;
 		case ID_FILE_EXIT:
 			SendMessage(hDlg, WM_CLOSE, 0, 0);
