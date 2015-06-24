@@ -11,6 +11,10 @@ using namespace std;
 
 #pragma comment(lib, "lib/DirectXLayer_2013.lib")
 
+#define _CRTDBG_MAP_ALLOC
+#include <stdlib.h>
+#include <crtdbg.h>
+
 // This object is your interface to the DirectX abstraction layer.
 DirectXLayer DXLayer;
 
@@ -91,17 +95,14 @@ void LoadSceneFromFile(const char *path);
 string GetFilePath(File_Extension ext = FILE_EXT_MESH);
 
 
-
-
-
-
-
 //--------------------------------------------------------------------------------------
 // Entry point to the program. Initializes everything and goes into a message processing 
 // loop. Idle time is used to render the scene.
 //--------------------------------------------------------------------------------------
 int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow )
 {
+	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+
 	UNREFERENCED_PARAMETER( hPrevInstance );
 	UNREFERENCED_PARAMETER( lpCmdLine );
 	g_hInst = hInstance;
@@ -436,13 +437,13 @@ void Update(void)
 
 	// BASIC camera controls.
 	if (GetAsyncKeyState(VK_UP))
-			g_cameraHeight += 0.01f;
+			g_cameraHeight += 0.05f;
 	if (GetAsyncKeyState(VK_DOWN))
-			g_cameraHeight -= 0.01f;
+			g_cameraHeight -= 0.05f;
 	if (GetAsyncKeyState(VK_RIGHT))
-			g_cameraZ += 0.01f;
+			g_cameraZ += 0.05f;
 	if (GetAsyncKeyState(VK_LEFT))
-			g_cameraZ -= 0.01f;
+			g_cameraZ -= 0.05f;
 	DXLayer.CreateCameraMatrix(XMVectorSet(0.0f, g_cameraHeight, g_cameraZ, 0.0f), XMVectorSet(0.0f, 5.0f, 0.0f, 0.0f));
 }
 
